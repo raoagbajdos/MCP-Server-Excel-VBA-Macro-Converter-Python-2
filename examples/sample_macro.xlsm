@@ -1,0 +1,31 @@
+# This is a placeholder for a sample Excel file with VBA macros
+# In a real scenario, this would be a binary Excel file (.xlsm)
+# For testing purposes, I'll create a sample VBA code file instead
+
+Sample VBA Code that would be in the Excel file:
+
+Sub CalculateTotal()
+    Dim ws As Worksheet
+    Dim lastRow As Long
+    Dim total As Double
+    
+    Set ws = ActiveSheet
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    
+    For i = 2 To lastRow
+        total = total + ws.Cells(i, 2).Value
+    Next i
+    
+    ws.Cells(lastRow + 1, 2).Value = total
+    MsgBox "Total calculated: " & total
+End Sub
+
+Function GetDiscount(amount As Double) As Double
+    If amount > 1000 Then
+        GetDiscount = amount * 0.1
+    ElseIf amount > 500 Then
+        GetDiscount = amount * 0.05
+    Else
+        GetDiscount = 0
+    End If
+End Function

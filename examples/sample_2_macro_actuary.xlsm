@@ -1,0 +1,332 @@
+' Actuarial VBA Calculations - Insurance Premium and Reserve Calculations
+' This file contains complex VBA macros for actuarial computations
+
+Option Explicit
+
+' Global constants for actuarial calculations
+Const MORTALITY_TABLE_BASE As Double = 0.001
+Const INTEREST_RATE As Double = 0.05
+Const EXPENSE_RATIO As Double = 0.15
+Const PROFIT_MARGIN As Double = 0.08
+
+' Main actuarial calculation module
+Sub CalculateLifeInsurancePremium()
+    Dim ws As Worksheet
+    Dim lastRow As Long
+    Dim i As Long
+    Dim age As Integer
+    Dim sumInsured As Double
+    Dim term As Integer
+    Dim premium As Double
+    Dim reserves As Double
+    
+    Set ws = ActiveSheet
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    
+    ' Process each policy
+    For i = 2 To lastRow
+        age = ws.Cells(i, 1).Value        ' Column A: Age
+        sumInsured = ws.Cells(i, 2).Value ' Column B: Sum Insured
+        term = ws.Cells(i, 3).Value       ' Column C: Term
+        
+        ' Calculate premium using NPV method
+        premium = CalculateNetPremium(age, sumInsured, term)
+        premium = premium * (1 + EXPENSE_RATIO + PROFIT_MARGIN)
+        
+        ' Calculate policy reserves
+        reserves = CalculatePolicyReserve(age, sumInsured, term, premium)
+        
+        ' Output results
+        ws.Cells(i, 4).Value = premium    ' Column D: Premium
+        ws.Cells(i, 5).Value = reserves   ' Column E: Reserves
+        ws.Cells(i, 6).Value = CalculateCommissionRate(premium) ' Column F: Commission
+        
+        ' Risk assessment
+        ws.Cells(i, 7).Value = AssessRiskCategory(age, sumInsured)
+    Next i
+    
+    ' Calculate portfolio statistics
+    Call CalculatePortfolioMetrics
+    
+    MsgBox "Premium calculations completed for " & (lastRow - 1) & " policies."
+End Sub
+
+Function CalculateNetPremium(age As Integer, sumInsured As Double, term As Integer) As Double
+    Dim i As Integer
+    Dim qx As Double
+    Dim lx As Double
+    Dim dx As Double
+    Dim vx As Double
+    Dim commutationM As Double
+    Dim commutationN As Double
+    Dim netPremium As Double
+    
+    ' Initialize life table values
+    lx = 100000 ' Radix
+    commutationM = 0
+    commutationN = 0
+    
+    ' Calculate commutation functions using standard actuarial methods
+    For i = 0 To term - 1
+        qx = GetMortalityRate(age + i)
+        dx = lx * qx
+        vx = (1 + INTEREST_RATE) ^ -(i + 1)
+        
+        commutationM = commutationM + (dx * vx)
+        commutationN = commutationN + (lx * vx)
+        
+        lx = lx - dx
+    Next i
+    
+    ' Net single premium calculation
+    netPremium = sumInsured * commutationM / commutationN
+    
+    CalculateNetPremium = netPremium
+End Function
+
+Function GetMortalityRate(age As Integer) As Double
+    ' Simplified Gompertz mortality model
+    Dim baseRate As Double
+    Dim growthFactor As Double
+    
+    baseRate = MORTALITY_TABLE_BASE
+    growthFactor = 1.08 ' Annual mortality increase factor
+    
+    GetMortalityRate = baseRate * (growthFactor ^ (age - 20))
+    
+    ' Cap mortality rate at 1.0
+    If GetMortalityRate > 1 Then GetMortalityRate = 1
+End Function
+
+Function CalculatePolicyReserve(age As Integer, sumInsured As Double, term As Integer, premium As Double) As Double
+    Dim currentAge As Integer
+    Dim yearsElapsed As Integer
+    Dim remainingTerm As Integer
+    Dim futureNetPremium As Double
+    Dim futureBenefits As Double
+    Dim reserve As Double
+    
+    ' Assume policy is 1 year old for reserve calculation
+    yearsElapsed = 1
+    currentAge = age + yearsElapsed
+    remainingTerm = term - yearsElapsed
+    
+    If remainingTerm <= 0 Then
+        CalculatePolicyReserve = 0
+        Exit Function
+    End If
+    
+    ' Calculate prospective reserve
+    futureBenefits = CalculateNetPremium(currentAge, sumInsured, remainingTerm)
+    futureNetPremium = premium / (1 + EXPENSE_RATIO + PROFIT_MARGIN)
+    
+    reserve = futureBenefits - (futureNetPremium * CalculateAnnuityValue(currentAge, remainingTerm))
+    
+    CalculatePolicyReserve = WorksheetFunction.Max(0, reserve)
+End Function
+
+Function CalculateAnnuityValue(age As Integer, term As Integer) As Double
+    Dim i As Integer
+    Dim survivalProb As Double
+    Dim discountFactor As Double
+    Dim annuityValue As Double
+    
+    annuityValue = 0
+    survivalProb = 1
+    
+    For i = 1 To term
+        survivalProb = survivalProb * (1 - GetMortalityRate(age + i - 1))
+        discountFactor = (1 + INTEREST_RATE) ^ -i
+        annuityValue = annuityValue + (survivalProb * discountFactor)
+    Next i
+    
+    CalculateAnnuityValue = annuityValue
+End Function
+
+Function CalculateCommissionRate(premium As Double) As Double
+    ' Commission structure based on premium amount
+    If premium < 1000 Then
+        CalculateCommissionRate = 0.15
+    ElseIf premium < 5000 Then
+        CalculateCommissionRate = 0.12
+    ElseIf premium < 10000 Then
+        CalculateCommissionRate = 0.10
+    Else
+        CalculateCommissionRate = 0.08
+    End If
+End Function
+
+Function AssessRiskCategory(age As Integer, sumInsured As Double) As String
+    Dim riskScore As Double
+    
+    ' Risk assessment algorithm
+    riskScore = (age / 100) + (sumInsured / 1000000) * 0.1
+    
+    If riskScore < 0.3 Then
+        AssessRiskCategory = "Low Risk"
+    ElseIf riskScore < 0.6 Then
+        AssessRiskCategory = "Medium Risk"
+    ElseIf riskScore < 0.8 Then
+        AssessRiskCategory = "High Risk"
+    Else
+        AssessRiskCategory = "Declined"
+    End If
+End Function
+
+Sub CalculatePortfolioMetrics()
+    Dim ws As Worksheet
+    Dim lastRow As Long
+    Dim totalPremium As Double
+    Dim totalReserves As Double
+    Dim totalSumInsured As Double
+    Dim avgAge As Double
+    Dim policyCount As Long
+    Dim i As Long
+    
+    Set ws = ActiveSheet
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    policyCount = lastRow - 1
+    
+    ' Calculate portfolio totals
+    For i = 2 To lastRow
+        totalPremium = totalPremium + ws.Cells(i, 4).Value
+        totalReserves = totalReserves + ws.Cells(i, 5).Value
+        totalSumInsured = totalSumInsured + ws.Cells(i, 2).Value
+        avgAge = avgAge + ws.Cells(i, 1).Value
+    Next i
+    
+    avgAge = avgAge / policyCount
+    
+    ' Output portfolio metrics
+    ws.Cells(lastRow + 3, 1).Value = "Portfolio Metrics:"
+    ws.Cells(lastRow + 4, 1).Value = "Total Premium:"
+    ws.Cells(lastRow + 4, 2).Value = totalPremium
+    ws.Cells(lastRow + 5, 1).Value = "Total Reserves:"
+    ws.Cells(lastRow + 5, 2).Value = totalReserves
+    ws.Cells(lastRow + 6, 1).Value = "Total Sum Insured:"
+    ws.Cells(lastRow + 6, 2).Value = totalSumInsured
+    ws.Cells(lastRow + 7, 1).Value = "Average Age:"
+    ws.Cells(lastRow + 7, 2).Value = Round(avgAge, 1)
+    ws.Cells(lastRow + 8, 1).Value = "Loss Ratio:"
+    ws.Cells(lastRow + 8, 2).Value = Round((totalReserves / totalPremium) * 100, 2) & "%"
+End Sub
+
+' Advanced actuarial functions
+Function CalculateSurrenderValue(age As Integer, sumInsured As Double, term As Integer, yearsElapsed As Integer) As Double
+    Dim policyReserve As Double
+    Dim surrenderCharges As Double
+    Dim surrenderValue As Double
+    
+    ' Calculate current policy reserve
+    policyReserve = CalculatePolicyReserve(age, sumInsured, term, 0)
+    
+    ' Apply surrender charges (decreasing over time)
+    If yearsElapsed <= 5 Then
+        surrenderCharges = policyReserve * (0.05 * (6 - yearsElapsed))
+    Else
+        surrenderCharges = 0
+    End If
+    
+    surrenderValue = policyReserve - surrenderCharges
+    CalculateSurrenderValue = WorksheetFunction.Max(0, surrenderValue)
+End Function
+
+Function CalculateDALY(age As Integer, gender As String) As Double
+    ' Disability-Adjusted Life Years calculation
+    Dim lifeExpectancy As Double
+    Dim disabilityWeight As Double
+    
+    ' Simplified life expectancy calculation
+    If gender = "M" Then
+        lifeExpectancy = 78.5 - age
+    Else
+        lifeExpectancy = 82.3 - age
+    End If
+    
+    ' Age-based disability weighting
+    If age < 65 Then
+        disabilityWeight = 0.05
+    Else
+        disabilityWeight = 0.15
+    End If
+    
+    CalculateDALY = lifeExpectancy * (1 - disabilityWeight)
+End Function
+
+Sub RunStochasticProjections()
+    Dim scenarios As Integer
+    Dim i As Integer
+    Dim j As Integer
+    Dim ws As Worksheet
+    Dim projectionYears As Integer
+    Dim randomShock As Double
+    Dim stressedMortality As Double
+    
+    Set ws = Worksheets.Add
+    ws.Name = "Stochastic_Projections"
+    
+    scenarios = 1000
+    projectionYears = 30
+    
+    ' Monte Carlo simulation for mortality scenarios
+    ws.Cells(1, 1).Value = "Scenario"
+    ws.Cells(1, 2).Value = "Final Reserve"
+    ws.Cells(1, 3).Value = "Profit/Loss"
+    
+    For i = 1 To scenarios
+        ' Generate random mortality shock
+        randomShock = WorksheetFunction.NormInv(Rnd(), 0, 0.2)
+        stressedMortality = MORTALITY_TABLE_BASE * (1 + randomShock)
+        
+        ' Project reserves under stressed scenario
+        Dim projectedReserve As Double
+        projectedReserve = ProjectReservesWithShock(stressedMortality, projectionYears)
+        
+        ws.Cells(i + 1, 1).Value = i
+        ws.Cells(i + 1, 2).Value = projectedReserve
+        ws.Cells(i + 1, 3).Value = CalculateProfitLoss(projectedReserve)
+    Next i
+    
+    ' Calculate percentiles
+    Call CalculateRiskMetrics(ws, scenarios)
+End Sub
+
+Function ProjectReservesWithShock(mortalityShock As Double, years As Integer) As Double
+    ' Simplified reserve projection with mortality shock
+    Dim baseReserve As Double
+    Dim shockImpact As Double
+    
+    baseReserve = 50000 ' Simplified base reserve
+    shockImpact = mortalityShock * years * 1000
+    
+    ProjectReservesWithShock = baseReserve + shockImpact
+End Function
+
+Function CalculateProfitLoss(finalReserve As Double) As Double
+    Dim targetReserve As Double
+    targetReserve = 55000 ' Target reserve level
+    
+    CalculateProfitLoss = targetReserve - finalReserve
+End Function
+
+Sub CalculateRiskMetrics(ws As Worksheet, scenarios As Integer)
+    Dim profitLossRange As Range
+    Dim var95 As Double
+    Dim var99 As Double
+    Dim expectedShortfall As Double
+    
+    Set profitLossRange = ws.Range(ws.Cells(2, 3), ws.Cells(scenarios + 1, 3))
+    
+    ' Calculate Value at Risk
+    var95 = WorksheetFunction.Percentile(profitLossRange, 0.05)
+    var99 = WorksheetFunction.Percentile(profitLossRange, 0.01)
+    
+    ' Output risk metrics
+    ws.Cells(scenarios + 3, 1).Value = "Risk Metrics:"
+    ws.Cells(scenarios + 4, 1).Value = "VaR 95%:"
+    ws.Cells(scenarios + 4, 2).Value = var95
+    ws.Cells(scenarios + 5, 1).Value = "VaR 99%:"
+    ws.Cells(scenarios + 5, 2).Value = var99
+    ws.Cells(scenarios + 6, 1).Value = "Mean P&L:"
+    ws.Cells(scenarios + 6, 2).Value = WorksheetFunction.Average(profitLossRange)
+End Sub
